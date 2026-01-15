@@ -166,7 +166,7 @@ class IrActionsReport(models.Model):
                     margin: 0 !important; 
                 }
                 tr { break-inside: avoid; page-break-inside: avoid; }
-                @page { -weasy-print: yes; size: auto; margin: 0; }
+                @page { -weasy-print: yes; size: auto; }
             """
             css_rules.append(compatibility_css)
 
