@@ -30,11 +30,48 @@ class IrActionsReport(models.Model):
     ):
         """
         Override the default wkhtmltopdf runner to use WeasyPrint.
+        This can be controlled globally or per-module via system settings.
         """
-        if not weasyprint:
-            _logger.warning(
-                "WeasyPrint not found, falling back to original wkhtmltopdf execution."
-            )
+        ICP = self.env["ir.config_parameter"].sudo()
+
+        # Check if WeasyPrint is enabled globally
+        weasyprint_enabled = ICP.get_param("report_weasyprint.enabled", False)
+
+        # Get module for this report
+        report_module = self._get_report_module(report_ref)
+
+        # Check if this module is in allowed list (if globally disabled)
+        allowed_modules = (
+            ICP.get_param("report_weasyprint.allowed_modules", "").split(",")
+            if ICP.get_param("report_weasyprint.allowed_modules")
+            else []
+        )
+        # Check if this module is in blocked list (if globally enabled)
+        blocked_modules = (
+            ICP.get_param("report_weasyprint.blocked_modules", "").split(",")
+            if ICP.get_param("report_weasyprint.blocked_modules")
+            else []
+        )
+
+        # Determine if we should use WeasyPrint
+        use_weasyprint = False
+        if weasyprint_enabled:
+            # Globally enabled, check if blocked
+            use_weasyprint = report_module not in blocked_modules
+        else:
+            # Globally disabled, check if allowed
+            use_weasyprint = report_module in allowed_modules
+
+        if not use_weasyprint or not weasyprint:
+            if not weasyprint:
+                _logger.warning(
+                    "WeasyPrint not found, falling back to original wkhtmltopdf execution."
+                )
+            else:
+                _logger.info(
+                    "WeasyPrint is not enabled for this report (module: %s). Using wkhtmltopdf instead.",
+                    report_module,
+                )
             return super(IrActionsReport, self)._run_wkhtmltopdf(
                 bodies,
                 report_ref,
@@ -45,7 +82,11 @@ class IrActionsReport(models.Model):
                 set_viewport_size,
             )
 
-        _logger.info("Generating PDF with WeasyPrint for report: %s", report_ref)
+        _logger.info(
+            "Generating PDF with WeasyPrint for report: %s (module: %s)",
+            report_ref,
+            report_module,
+        )
 
         # 1. Resolve Base URL for assets
         base_url = self.env["ir.config_parameter"].sudo().get_param("web.base.url")
@@ -57,6 +98,7 @@ class IrActionsReport(models.Model):
         # 2. Parse Margins from specific_paperformat_args
         margin_style = ""
         if specific_paperformat_args:
+
             def get_arg(key):
                 val = specific_paperformat_args.get(key)
                 if val is not None:
@@ -105,6 +147,16 @@ class IrActionsReport(models.Model):
             html_parts = []
             css_rules = []
 
+            # 5. Bootstrap/Odoo Compatibility Fixes
+            # Moved to the top to serve as a baseline/reset.
+            compatibility_css = """
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                .container { width: 100% !important; max-width: none !important; }
+                tr { break-inside: avoid; page-break-inside: avoid; }
+                @page { -weasy-print: yes; size: auto; margin: 0; }
+            """
+            css_rules.append(compatibility_css)
+
             if margin_style:
                 css_rules.append(margin_style)
 
@@ -125,14 +177,6 @@ class IrActionsReport(models.Model):
                     "@page { @bottom-center { content: element(footer); width: 100%; } }"
                 )
 
-            # 5. Bootstrap/Odoo Compatibility Fixes
-            compatibility_css = """
-                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                .container { width: 100% !important; max-width: none !important; }
-                tr { break-inside: avoid; page-break-inside: avoid; }
-                @page { -weasy-print: yes; size: auto; margin: 0; }
-            """
-            css_rules.append(compatibility_css)
             html_parts.append(body_str)
 
             full_html = f"""
@@ -172,3 +216,19 @@ class IrActionsReport(models.Model):
         buffer = io.BytesIO()
         final_doc.write_pdf(target=buffer)
         return buffer.getvalue()
+
+    def _get_report_module(self, report_ref):
+        """Extract the module name from a report reference."""
+        if isinstance(report_ref, str):
+            if "." in report_ref:
+                return report_ref.split(".")[0]
+        # Fallback: try to find the report record
+        report = (
+            self.search([("report_name", "=", report_ref)], limit=1)
+            if report_ref
+            else self
+        )
+        if report and report.module:
+            return report.module
+        # If we can't determine, assume unknown
+        return "unknown"

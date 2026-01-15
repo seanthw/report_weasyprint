@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <record id="res_config_settings_view_form_weasyprint" model="ir.ui.view">
+            <field name="name">res.config.settings.view.form.weasyprint</field>
+            <field name="model">res.config.settings</field>
+            <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//form" position="inside">
+                    <group string="WeasyPrint Settings" col="2">
+                        <field name="weasyprint_enabled"/>
+                        <field name="weasyprint_allowed_modules" widget="many2many_tags" domain="[('state', '=', 'installed')]" invisible="weasyprint_enabled"/>
+                        <field name="weasyprint_blocked_modules" widget="many2many_tags" domain="[('state', '=', 'installed')]" invisible="not weasyprint_enabled"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
