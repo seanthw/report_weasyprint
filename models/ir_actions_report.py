@@ -150,8 +150,21 @@ class IrActionsReport(models.Model):
             # 5. Bootstrap/Odoo Compatibility Fixes
             # Moved to the top to serve as a baseline/reset.
             compatibility_css = """
-                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                .container { width: 100% !important; max-width: none !important; }
+                * { 
+                    -webkit-print-color-adjust: exact !important; 
+                    print-color-adjust: exact !important; 
+                    box-sizing: border-box !important;
+                }
+                html, body {
+                    height: auto !important;
+                    overflow: visible !important;
+                }
+                .container { 
+                    width: 100% !important; 
+                    max-width: none !important; 
+                    padding: 0 !important; 
+                    margin: 0 !important; 
+                }
                 tr { break-inside: avoid; page-break-inside: avoid; }
                 @page { -weasy-print: yes; size: auto; margin: 0; }
             """
